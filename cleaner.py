@@ -8,6 +8,7 @@
 import requests
 import time
 import datetime
+import re
 
 
 class ELKCleaner():
@@ -24,21 +25,27 @@ class ELKCleaner():
         fileNames = []
         for i in self.getDataList().splitlines():
             if len(i) > 0:
-                if "filebeat-" in i:
-                    #print(i)
+                #print(i)
+                if "open" in i:
                     fileName = i.split()[2]
-                    fileDate = fileName.split("-")[1]
-                    d1 = datetime.datetime.strptime(time.strftime("%Y.%m.%d"), "%Y.%m.%d")
-                    d2 = datetime.datetime.strptime(fileDate, "%Y.%m.%d")
-                    #print((d1 - d2).days)
-                    if (d1 - d2).days > self.interval:
-                        fileNames.append(fileName)
+                    fileDate = re.findall(r"(\d{4}\.\d{1,2}\.\d{1,2})", fileName)
+                    if fileDate:
+                        fileDate = fileDate[0]
+                        d1 = datetime.datetime.strptime(time.strftime("%Y.%m.%d"), "%Y.%m.%d")
+                        d2 = datetime.datetime.strptime(fileDate, "%Y.%m.%d")
+                        #print((d1 - d2).days)
+                        if (d1 - d2).days > self.interval:
+                            fileNames.append(fileName)
         return fileNames
 
 if __name__ == "__main__":
     elkServer = "10.200.44.31:9200"
-    interval = 15
+    interval = 30
     ec = ELKCleaner(elkServer, interval)
-    for oldFile in ec.getOldData():
-        requests.delete("http://{}/{}".format(elkServer, oldFile))
-        print("{} delete successful.".format(oldFile))
+    oldIndexs = ec.getOldData()
+    if len(oldIndexs) > 1:
+        for i in oldIndexs:
+            requests.delete("http://{}/{}".format(elkServer, i))
+            print("{} delete successful.".format(i))
+    else:
+        print("There is no index old than {}.".format(interval))
